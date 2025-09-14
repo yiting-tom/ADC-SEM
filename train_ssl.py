@@ -59,6 +59,12 @@ def parse_args():
     parser.add_argument('--output_dir', type=str, default='./outputs',
                         help='Output directory for logs and models')
 
+    # Pretrained weights (local or disable timm downloads)
+    parser.add_argument('--pretrained_path', type=str, default=None,
+                        help='Path to local pretrained TinyViT weights (state_dict).')
+    parser.add_argument('--no_timm_pretrained', action='store_true',
+                        help='Disable timm pretrained weights to avoid network usage.')
+
     return parser.parse_args()
 
 
@@ -100,6 +106,8 @@ def main():
     print(f"Learning rate: {args.lr}")
     print(f"Accelerator: {args.accelerator}")
     print(f"Save path: {args.save_path}")
+    if args.pretrained_path:
+        print(f"Using local pretrained weights: {args.pretrained_path}")
     print("-" * 50)
 
     # Create trainer
@@ -113,7 +121,9 @@ def main():
         model_name=args.model_name,
         use_h5=args.use_h5,
         h5_dataset_key=args.h5_dataset_key,
-        file_extension=args.file_extension
+        file_extension=args.file_extension,
+        pretrained_path=args.pretrained_path,
+        timm_pretrained=not args.no_timm_pretrained
     )
 
     try:

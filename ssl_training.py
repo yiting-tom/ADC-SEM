@@ -102,7 +102,9 @@ class SSLTrainingModule(pl.LightningModule):
         learning_rate: float = 1e-3,
         weight_decay: float = 1e-6,
         temperature: float = 0.1,
-        max_epochs: int = 100
+        max_epochs: int = 100,
+        pretrained_path: str | None = None,
+        timm_pretrained: bool = True,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -111,7 +113,9 @@ class SSLTrainingModule(pl.LightningModule):
         self.backbone, projection_head = create_ssl_model_components(
             num_channels=num_channels,
             model_name=model_name,
-            projection_dim=projection_dim
+            projection_dim=projection_dim,
+            pretrained_path=pretrained_path,
+            timm_pretrained=timm_pretrained,
         )
 
         # Create SSL model - manually combine backbone and projection head
@@ -194,7 +198,9 @@ class SSLTrainer:
         model_name: str = 'tiny_vit_21m_512.dist_in22k_ft_in1k',
         use_h5: bool = False,
         h5_dataset_key: str = 'images',
-        file_extension: str = 'npy'
+        file_extension: str = 'npy',
+        pretrained_path: str | None = None,
+        timm_pretrained: bool = True,
     ):
         self.data_path = data_path
         self.num_channels = num_channels
@@ -206,6 +212,8 @@ class SSLTrainer:
         self.use_h5 = use_h5
         self.h5_dataset_key = h5_dataset_key
         self.file_extension = file_extension
+        self.pretrained_path = pretrained_path
+        self.timm_pretrained = timm_pretrained
 
     def create_dataloader(self):
         """Create the data loader for training."""
@@ -258,7 +266,9 @@ class SSLTrainer:
             num_channels=self.num_channels,
             model_name=self.model_name,
             learning_rate=self.learning_rate,
-            max_epochs=self.max_epochs
+            max_epochs=self.max_epochs,
+            pretrained_path=self.pretrained_path,
+            timm_pretrained=self.timm_pretrained,
         )
 
         # Create trainer

@@ -5,7 +5,8 @@ This project implements self-supervised learning (SSL) training for TinyViT mode
 ## Features
 
 - **Multi-channel Support**: Modified TinyViT architecture to handle 15-channel input
-- **SSL Training**: Self-supervised learning using SimCLR with geometric augmentations
+- **SSL Training**: SimCLR with geometric augmentations; additional algorithms below
+- **Algorithm Support**: MoCo v3 (`train_moco_v3.py`), DINOv2 (`train_dino_v2.py`), DINOv3 (`train_dino_v3.py`)
 - **Flexible Data Loading**: Support for both directory of .npy files and HDF5 datasets
 - **Intelligent Weight Initialization**: Averages RGB pretrained weights across new channels
 - **Production Ready**: PyTorch Lightning integration with proper logging and checkpointing
@@ -14,6 +15,8 @@ This project implements self-supervised learning (SSL) training for TinyViT mode
 
 ```bash
 pip install -r requirements.txt
+# or
+make install
 ```
 
 ## Quick Start
@@ -48,6 +51,37 @@ python train_ssl.py \
     --h5_dataset_key images \
     --batch_size 32 \
     --epochs 100
+```
+
+### Smoke Test (All Methods)
+Run a tiny forward/backward step for SimCLR, MoCo v3, DINOv2, and DINOv3 without downloading weights:
+```bash
+python smoke_test.py --data_path ./example_data --file_extension npy
+```
+Use `--methods` to select subsets, e.g. `--methods simclr moco`.
+
+Or via Makefile:
+```bash
+make smoke                           # default: example_data, npy, all methods
+make smoke FILE_EXT=tiff             # test TIFF loader
+make smoke METHODS="simclr moco"      # run a subset
+make smoke DATA_PATH=./data          # custom data directory
+```
+
+### Train via Makefile
+Convenience targets for common runs (set DATA_PATH/FILE_EXT/CHANNELS/EPOCHS/BS/LR/PRETRAINED_PATH/NO_TIMM):
+```bash
+# SimCLR
+make train-simclr DATA_PATH=./data FILE_EXT=npy CHANNELS=15 EPOCHS=50 PRETRAINED_PATH=/path/to/tinyvit.pth NO_TIMM=1
+
+# MoCo v3
+make train-moco DATA_PATH=./tiff_data FILE_EXT=tiff CHANNELS=15 EPOCHS=50 MOCO_LR=6e-2 PRETRAINED_PATH=/path/to/tinyvit.pth NO_TIMM=1
+
+# DINOv2
+make train-dino2 DATA_PATH=./data FILE_EXT=npy CHANNELS=15 EPOCHS=50 PRETRAINED_PATH=/path/to/tinyvit.pth NO_TIMM=1
+
+# DINOv3
+make train-dino3 DATA_PATH=./data FILE_EXT=npy CHANNELS=15 EPOCHS=50 PRETRAINED_PATH=/path/to/tinyvit.pth NO_TIMM=1
 ```
 
 ## Data Format Requirements
@@ -164,11 +198,33 @@ python train_ssl.py \
     --epochs 100
 ```
 
+### MoCo v3 SSL Training
+```bash
+# NPY directory
+python train_moco_v3.py --data_path ./data --file_extension npy --num_channels 15 --batch_size 32 --epochs 50 \
+  --pretrained_path /path/to/local_tinyvit_weights.pth --no_timm_pretrained
+
+# TIFF directory
+python train_moco_v3.py --data_path ./tiff_data --file_extension tiff --num_channels 15
+
+# HDF5 dataset
+python train_moco_v3.py --data_path ./dataset.h5 --use_h5 --h5_dataset_key images --num_channels 15 \
+  --pretrained_path /path/to/local_tinyvit_weights.pth --no_timm_pretrained
+
+# Quick sanity run
+python train_moco_v3.py --data_path ./data --batch_size 4 --epochs 1 --num_workers 0
+```
+Notes:
+- Uses NTXent with memory bank and momentum encoder updates via cosine schedule.
+- Saves backbone to `outputs/tinyvit_moco_v3_backbone.pth` and projection head to `outputs/tinyvit_moco_v3_proj_head.pth`.
+
 ## Output Files
 
 After training, you'll get:
 - `tinyvit_ssl_model.ckpt`: Full PyTorch Lightning checkpoint
 - `tinyvit_ssl_model_backbone.pth`: Just the backbone weights for downstream tasks
+ - MoCo v3: `outputs/tinyvit_moco_v3_backbone.pth` and projection head `..._proj_head.pth`
+ - DINOv2/DINOv3: student backbone and head saved in `outputs/`
 
 ## Using Pretrained Backbone
 
@@ -184,15 +240,70 @@ backbone.load_state_dict(torch.load('tinyvit_ssl_model_backbone.pth'))
 features = backbone(your_15_channel_input)  # Shape: (batch_size, feature_dim)
 ```
 
+## Local Pretrained Weights
+
+All training CLIs support local TinyViT weights and disabling online downloads:
+- Pass `--pretrained_path /path/to/tinyvit_weights.pth` and `--no_timm_pretrained`.
+- Examples:
+  - SimCLR: `python train_ssl.py --data_path ./data --pretrained_path /path/to/tinyvit.pth --no_timm_pretrained`
+  - MoCo v3: `python train_moco_v3.py --data_path ./data --pretrained_path /path/to/tinyvit.pth --no_timm_pretrained`
+  - DINOv2: `python train_dino_v2.py --data_path ./data --pretrained_path /path/to/tinyvit.pth --no_timm_pretrained`
+  - DINOv3: `python train_dino_v3.py --data_path ./data --pretrained_path /path/to/tinyvit.pth --no_timm_pretrained`
+
 ## Key Files
 
 - `dataset.py`: Custom dataset classes for multi-channel data
 - `model.py`: TinyViT architecture modifications and utilities
 - `ssl_training.py`: SSL training pipeline with lightly integration
 - `train_ssl.py`: Main training script with CLI interface
+- `moco_training.py`: MoCo model, collate, and trainer for multi-channel TinyViT
+- `train_moco_v3.py`: CLI entrypoint for MoCo v3-style SSL training
+ 
+### DINOv2 SSL Training
+```bash
+# NPY directory
+python train_dino_v2.py --data_path ./data --file_extension npy --num_channels 15 --batch_size 32 --epochs 50 \
+  --pretrained_path /path/to/local_tinyvit_weights.pth --no_timm_pretrained
+
+# TIFF directory
+python train_dino_v2.py --data_path ./tiff_data --file_extension tiff --num_channels 15
+
+# HDF5 dataset
+python train_dino_v2.py --data_path ./dataset.h5 --use_h5 --h5_dataset_key images --num_channels 15 \
+  --pretrained_path /path/to/local_tinyvit_weights.pth --no_timm_pretrained
+
+# Quick sanity run
+python train_dino_v2.py --data_path ./data --batch_size 4 --epochs 1 --num_workers 0
+```
+Notes:
+- Student/teacher with EMA and multi-crop views; geometric-only transforms.
+- Uses DINOLoss with temperature warmup and centering.
+
+### DINOv3 SSL Training
+```bash
+# NPY directory
+python train_dino_v3.py --data_path ./data --file_extension npy --num_channels 15 --batch_size 32 --epochs 50 \
+  --pretrained_path /path/to/local_tinyvit_weights.pth --no_timm_pretrained
+
+# TIFF directory
+python train_dino_v3.py --data_path ./tiff_data --file_extension tiff --num_channels 15
+
+# HDF5 dataset
+python train_dino_v3.py --data_path ./dataset.h5 --use_h5 --h5_dataset_key images --num_channels 15 \
+  --pretrained_path /path/to/local_tinyvit_weights.pth --no_timm_pretrained
+
+# Quick sanity run
+python train_dino_v3.py --data_path ./data --batch_size 4 --epochs 1 --num_workers 0
+```
+Notes:
+- DINOv3-style defaults: 2 global + 8 local crops, proj_dim=384, cosine EMA and LR.
 - `optuna_optimization.py`: Hyperparameter optimization with Optuna
 - `optimize_hyperparams.py`: CLI script for running optimization
 - `train_optimized.py`: Train with optimized hyperparameters
+- `dino_training.py`: DINOv2-style trainer with multi-crop and EMA teacher
+- `train_dino_v2.py`: CLI entrypoint for DINOv2-style SSL training
+- `dino_v3_training.py`: DINOv3-style trainer with expanded local crops and larger head
+- `train_dino_v3.py`: CLI entrypoint for DINOv3-style SSL training
 
 ## Arguments Reference
 

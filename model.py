@@ -95,7 +95,9 @@ class TinyViTMultiChannel:
     @staticmethod
     def get_backbone_for_ssl(
         num_channels: int = 15,
-        model_name: str = 'tiny_vit_21m_512.dist_in22k_ft_in1k'
+        model_name: str = 'tiny_vit_21m_512.dist_in22k_ft_in1k',
+        pretrained_path: Optional[str] = None,
+        timm_pretrained: bool = True,
     ):
         """
         Creates a TinyViT backbone suitable for SSL training (without classifier head).
@@ -110,10 +112,22 @@ class TinyViTMultiChannel:
         # Create model without the final classification layer
         model = timm.create_model(
             model_name,
-            pretrained=True,
+            pretrained=(timm_pretrained if pretrained_path is None else False),
             num_classes=0,  # Remove classifier
             global_pool=''  # Remove global pooling
         )
+
+        # If a local pretrained checkpoint is provided, load it first
+        if pretrained_path is not None:
+            try:
+                sd = torch.load(pretrained_path, map_location='cpu')
+                # Some checkpoints save under 'state_dict' or have prefixes
+                if isinstance(sd, dict) and 'state_dict' in sd:
+                    sd = sd['state_dict']
+                model.load_state_dict(sd, strict=False)
+                print(f"✅ Loaded local pretrained weights from {pretrained_path}")
+            except Exception as e:
+                print(f"⚠️ Failed to load local pretrained weights: {e}")
 
         # Modify patch embedding
         TinyViTMultiChannel._modify_patch_embedding(model, num_channels)
@@ -126,11 +140,16 @@ class TinyViTBackbone(nn.Module):
     Wrapper for TinyViT backbone that ensures proper output dimensions for SSL.
     """
 
-    def __init__(self, num_channels: int = 15, model_name: str = 'tiny_vit_21m_512.dist_in22k_ft_in1k'):
+    def __init__(self, num_channels: int = 15, model_name: str = 'tiny_vit_21m_512.dist_in22k_ft_in1k', *, pretrained_path: Optional[str] = None, timm_pretrained: bool = True):
         super().__init__()
 
         # Create backbone
-        self.backbone = TinyViTMultiChannel.get_backbone_for_ssl(num_channels, model_name)
+        self.backbone = TinyViTMultiChannel.get_backbone_for_ssl(
+            num_channels=num_channels,
+            model_name=model_name,
+            pretrained_path=pretrained_path,
+            timm_pretrained=timm_pretrained,
+        )
 
         # Get the feature dimension
         with torch.no_grad():
@@ -166,7 +185,10 @@ def create_ssl_model_components(
     num_channels: int = 15,
     model_name: str = 'tiny_vit_21m_512.dist_in22k_ft_in1k',
     projection_dim: int = 128,
-    hidden_dim: Optional[int] = None
+    hidden_dim: Optional[int] = None,
+    *,
+    pretrained_path: Optional[str] = None,
+    timm_pretrained: bool = True,
 ):
     """
     Creates backbone and projection head for SSL training.
@@ -180,7 +202,7 @@ def create_ssl_model_components(
     Returns:
         tuple: (backbone, projection_head)
     """
-    backbone = TinyViTBackbone(num_channels, model_name)
+    backbone = TinyViTBackbone(num_channels, model_name, pretrained_path=pretrained_path, timm_pretrained=timm_pretrained)
 
     if hidden_dim is None:
         hidden_dim = backbone.feature_dim
