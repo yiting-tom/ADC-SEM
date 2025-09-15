@@ -21,7 +21,7 @@ NO_TIMM ?= 1
 TIMM_FLAG := $(if $(NO_TIMM),--no_timm_pretrained,)
 PRETRAINED_FLAG := $(if $(PRETRAINED_PATH),--pretrained_path $(PRETRAINED_PATH),)
 
-.PHONY: help smoke install train-simclr train-moco train-dino2 train-dino3
+.PHONY: help smoke install train-simclr train-moco train-dino2 train-dino3 train-finetune-binary train-finetune-multi
 
 help:
 	@echo "Available targets:"
@@ -31,6 +31,8 @@ help:
 	@echo "  train-moco    Run MoCo v3 training (train_moco_v3.py)"
 	@echo "  train-dino2   Run DINOv2 training (train_dino_v2.py)"
 	@echo "  train-dino3   Run DINOv3 training (train_dino_v3.py)"
+	@echo "  train-finetune-binary   Fine-tune classifier (binary) on TIFFs"
+	@echo "  train-finetune-multi    Fine-tune classifier (multiclass) on TIFFs"
 	@echo "Variables: DATA_PATH=./example_data FILE_EXT=npy METHODS=\"simclr moco dino2 dino3\""
 
 install:
@@ -58,3 +60,11 @@ train-dino3:
 	$(PY) train_dino_v3.py --data_path $(DATA_PATH) --file_extension $(FILE_EXT) \
 	  --num_channels $(CHANNELS) --epochs $(EPOCHS) --batch_size $(BS) --lr $(LR) \
 	  $(PRETRAINED_FLAG) $(TIMM_FLAG)
+
+train-finetune-binary:
+	$(PY) train_finetune.py --data_path $(DATA_PATH) --task binary --num_channels $(CHANNELS) \
+	  --epochs $(EPOCHS) --batch_size $(BS) --lr $(LR) $(PRETRAINED_FLAG) $(TIMM_FLAG)
+
+train-finetune-multi:
+	$(PY) train_finetune.py --data_path $(DATA_PATH) --task multiclass --num_channels $(CHANNELS) \
+	  --epochs $(EPOCHS) --batch_size $(BS) --lr $(LR) $(PRETRAINED_FLAG) $(TIMM_FLAG)

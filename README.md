@@ -218,6 +218,29 @@ Notes:
 - Uses NTXent with memory bank and momentum encoder updates via cosine schedule.
 - Saves backbone to `outputs/tinyvit_moco_v3_backbone.pth` and projection head to `outputs/tinyvit_moco_v3_proj_head.pth`.
 
+### Fine-tuning for Classification (TIFF)
+File naming: `<label_id>_<...rest...>.tiff`. Example: `26_35_U2523.20_1368.tiff` → label id `26`.
+
+- Binary classification: label id `1` is Normal (class 1); all others are Abnormal (class 0).
+  ```bash
+  python train_finetune.py --data_path ./tiff_data --task binary \
+    --num_channels 15 --epochs 50 --batch_size 32 \
+    --pretrained_path /path/to/tinyvit.pth --no_timm_pretrained
+  ```
+
+- Multiclass classification: classes discovered from dataset (unique first tokens).
+  ```bash
+  python train_finetune.py --data_path ./tiff_data --task multiclass \
+    --num_channels 15 --epochs 50 --batch_size 32 \
+    --pretrained_path /path/to/tinyvit.pth --no_timm_pretrained
+  ```
+
+Makefile shortcuts:
+```bash
+make train-finetune-binary DATA_PATH=./tiff_data CHANNELS=15 PRETRAINED_PATH=/path/to/tinyvit.pth NO_TIMM=1
+make train-finetune-multi  DATA_PATH=./tiff_data CHANNELS=15 PRETRAINED_PATH=/path/to/tinyvit.pth NO_TIMM=1
+```
+
 ## Output Files
 
 After training, you'll get:
