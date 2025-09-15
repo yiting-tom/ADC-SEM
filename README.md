@@ -239,6 +239,10 @@ Makefile shortcuts:
 ```bash
 make train-finetune-binary DATA_PATH=./tiff_data CHANNELS=15 PRETRAINED_PATH=/path/to/tinyvit.pth NO_TIMM=1
 make train-finetune-multi  DATA_PATH=./tiff_data CHANNELS=15 PRETRAINED_PATH=/path/to/tinyvit.pth NO_TIMM=1
+
+# Auto-pick latest SSL backbone from outputs/ and fine-tune
+make train-finetune-auto DATA_PATH=./tiff_data TASK=binary NO_TIMM=1
+make train-finetune-auto DATA_PATH=./tiff_data TASK=multiclass NO_TIMM=1
 ```
 
 Outputs:

@@ -21,7 +21,7 @@ NO_TIMM ?= 1
 TIMM_FLAG := $(if $(NO_TIMM),--no_timm_pretrained,)
 PRETRAINED_FLAG := $(if $(PRETRAINED_PATH),--pretrained_path $(PRETRAINED_PATH),)
 
-.PHONY: help smoke install train-simclr train-moco train-dino2 train-dino3 train-finetune-binary train-finetune-multi
+.PHONY: help smoke install train-simclr train-moco train-dino2 train-dino3 train-finetune-binary train-finetune-multi train-finetune-auto
 
 help:
 	@echo "Available targets:"
@@ -33,6 +33,7 @@ help:
 	@echo "  train-dino3   Run DINOv3 training (train_dino_v3.py)"
 	@echo "  train-finetune-binary   Fine-tune classifier (binary) on TIFFs"
 	@echo "  train-finetune-multi    Fine-tune classifier (multiclass) on TIFFs"
+	@echo "  train-finetune-auto     Fine-tune using the latest backbone in outputs/ (set TASK=binary|multiclass)"
 	@echo "Variables: DATA_PATH=./example_data FILE_EXT=npy METHODS=\"simclr moco dino2 dino3\""
 
 install:
@@ -68,3 +69,13 @@ train-finetune-binary:
 train-finetune-multi:
 	$(PY) train_finetune.py --data_path $(DATA_PATH) --task multiclass --num_channels $(CHANNELS) \
 	  --epochs $(EPOCHS) --batch_size $(BS) --lr $(LR) $(PRETRAINED_FLAG) $(TIMM_FLAG)
+
+train-finetune-auto:
+	@BP="$${PRETRAINED_PATH:-$$(ls -t outputs/*backbone*.pth 2>/dev/null | head -n1)}"; \
+	if [ -z "$$BP" ]; then \
+	  echo "No backbone found in outputs/. Set PRETRAINED_PATH or train an SSL model first."; \
+	  exit 1; \
+	fi; \
+	echo "Using backbone: $$BP"; \
+	$(PY) train_finetune.py --data_path $(DATA_PATH) --task $${TASK:-binary} --num_channels $(CHANNELS) \
+	  --epochs $(EPOCHS) --batch_size $(BS) --lr $(LR) $(TIMM_FLAG) --pretrained_path "$$BP"
