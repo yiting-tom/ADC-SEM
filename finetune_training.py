@@ -16,6 +16,9 @@ import os
 import glob
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple
+import json
+import csv
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -200,7 +203,7 @@ class FinetuneTrainer:
     def __init__(self, cfg: FinetuneConfig) -> None:
         self.cfg = cfg
 
-    def _build_datasets(self) -> Tuple[Dataset, Dataset, Dict[str, int]]:
+    def _build_datasets(self) -> Tuple[Dataset, Dataset, Dict[str, int], List[str]]:
         train_tf = default_train_transforms(self.cfg.num_channels)
         val_tf = default_val_transforms(self.cfg.num_channels)
         full = LabeledTiffDataset(
@@ -226,6 +229,11 @@ class FinetuneTrainer:
         train_subset, val_subset = random_split(range(n_total), [n_train, n_val], generator=g)
 
         class_to_idx = full.class_to_idx
+        # derive idx->class ordered by index
+        idx_to_class = [None] * len(class_to_idx) if self.cfg.task != "binary" else ["Abnormal", "Normal"]
+        if self.cfg.task != "binary":
+            for k, v in class_to_idx.items():
+                idx_to_class[v] = k
 
         # Wrap subsets with lambda-style indexing
         class Proxy(Dataset):
@@ -237,11 +245,11 @@ class FinetuneTrainer:
             def __getitem__(self, i):
                 return self.base[self.indices[i]]
 
-        return Proxy(full, train_subset.indices), Proxy(val_ds, val_subset.indices), class_to_idx
+        return Proxy(full, train_subset.indices), Proxy(val_ds, val_subset.indices), class_to_idx, idx_to_class
 
     def train(self) -> Dict[str, List[float]]:
         device = self.cfg.device or ("cuda" if torch.cuda.is_available() else "cpu")
-        train_ds, val_ds, class_to_idx = self._build_datasets()
+        train_ds, val_ds, class_to_idx, idx_to_class = self._build_datasets()
         num_classes = 2 if self.cfg.task == "binary" else len(class_to_idx)
 
         model = FinetuneModel(
@@ -293,6 +301,8 @@ class FinetuneTrainer:
             v_loss = 0.0
             correct = 0
             total = 0
+            all_preds: List[int] = []
+            all_targets: List[int] = []
             with torch.no_grad():
                 for x, y in val_loader:
                     x = x.to(device)
@@ -307,18 +317,79 @@ class FinetuneTrainer:
                     v_loss += float(loss)
                     correct += int((preds == y).sum().item())
                     total += int(y.numel())
+                    all_preds.extend(preds.detach().cpu().tolist())
+                    all_targets.extend(y.detach().cpu().tolist())
             val_loss = v_loss / max(1, len(val_loader))
             val_acc = correct / max(1, total)
 
             history["train_loss"].append(train_loss)
             history["val_loss"].append(val_loss)
             history["val_acc"].append(val_acc)
-            print(f"epoch {epoch:02d} | train_loss {train_loss:.4f} | val_loss {val_loss:.4f} | val_acc {val_acc:.4f}")
+            # Per-class metrics
+            cm, per_class = self._confusion_and_per_class(num_classes, all_targets, all_preds)
+            per_class_str = " ".join(
+                [
+                    f"[{i}:{(idx_to_class[i] if idx_to_class and i < len(idx_to_class) else i)}] P={m['precision']:.2f} R={m['recall']:.2f} F1={m['f1']:.2f}"
+                    for i, m in enumerate(per_class)
+                ]
+            )
 
-        # Save final model
+            print(
+                f"epoch {epoch:02d} | train_loss {train_loss:.4f} | val_loss {val_loss:.4f} | val_acc {val_acc:.4f} | per-class {per_class_str}"
+            )
+
+        # Save final model and metrics
         os.makedirs("outputs", exist_ok=True)
-        save_name = f"tinyvit_finetune_{self.cfg.task}.pth"
-        torch.save(model.state_dict(), os.path.join("outputs", save_name))
-        print(f"✅ Saved fine-tuned model to outputs/{save_name}")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_prefix = f"tinyvit_finetune_{self.cfg.task}_{timestamp}"
+        model_path = os.path.join("outputs", f"{save_prefix}.pth")
+        torch.save(model.state_dict(), model_path)
+
+        # Save last epoch confusion matrix and per-class metrics
+        cm, per_class = self._confusion_and_per_class(num_classes, all_targets, all_preds)
+        cm_path = os.path.join("outputs", f"{save_prefix}_confusion_matrix.csv")
+        with open(cm_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            header = ["class"] + [idx_to_class[i] if idx_to_class and i < len(idx_to_class) else str(i) for i in range(num_classes)]
+            writer.writerow(header)
+            for i in range(num_classes):
+                row = [idx_to_class[i] if idx_to_class and i < len(idx_to_class) else str(i)] + list(map(int, cm[i]))
+                writer.writerow(row)
+
+        metrics_path = os.path.join("outputs", f"{save_prefix}_metrics.json")
+        with open(metrics_path, "w") as f:
+            json.dump(
+                {
+                    "task": self.cfg.task,
+                    "num_classes": num_classes,
+                    "classes": idx_to_class,
+                    "history": history,
+                    "val_acc": history["val_acc"][-1] if history["val_acc"] else None,
+                    "per_class": per_class,
+                },
+                f,
+                indent=2,
+            )
+
+        print(f"✅ Saved fine-tuned model to {model_path}")
+        print(f"✅ Saved confusion matrix to {cm_path}")
+        print(f"✅ Saved metrics to {metrics_path}")
         return history
 
+    @staticmethod
+    def _confusion_and_per_class(num_classes: int, targets: List[int], preds: List[int]):
+        import numpy as _np
+        cm = _np.zeros((num_classes, num_classes), dtype=_np.int64)
+        for t, p in zip(targets, preds):
+            if 0 <= t < num_classes and 0 <= p < num_classes:
+                cm[t, p] += 1
+        per_class = []
+        for i in range(num_classes):
+            tp = cm[i, i]
+            fn = cm[i, :].sum() - tp
+            fp = cm[:, i].sum() - tp
+            precision = float(tp) / float(tp + fp) if (tp + fp) > 0 else 0.0
+            recall = float(tp) / float(tp + fn) if (tp + fn) > 0 else 0.0
+            f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
+            per_class.append({"precision": precision, "recall": recall, "f1": f1})
+        return cm.tolist(), per_class

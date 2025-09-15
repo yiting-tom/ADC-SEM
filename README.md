@@ -241,6 +241,11 @@ make train-finetune-binary DATA_PATH=./tiff_data CHANNELS=15 PRETRAINED_PATH=/pa
 make train-finetune-multi  DATA_PATH=./tiff_data CHANNELS=15 PRETRAINED_PATH=/path/to/tinyvit.pth NO_TIMM=1
 ```
 
+Outputs:
+- Model weights: `outputs/tinyvit_finetune_<task>_<timestamp>.pth`
+- Confusion matrix (CSV): `outputs/tinyvit_finetune_<task>_<timestamp>_confusion_matrix.csv`
+- Metrics (JSON): `outputs/tinyvit_finetune_<task>_<timestamp>_metrics.json` including per-class precision/recall/F1 and train/val loss curves.
+
 ## Output Files
 
 After training, you'll get:
