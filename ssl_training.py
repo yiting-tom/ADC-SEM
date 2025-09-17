@@ -99,6 +99,11 @@ class SSLTrainingModule(pl.LightningModule):
         num_channels: int = 15,
         model_name: str = 'tiny_vit_21m_512.dist_in22k_ft_in1k',
         projection_dim: int = 128,
+        projection_head: str = 'mlp',
+        kan_num_knots: int = 16,
+        kan_x_min: float = -3.0,
+        kan_x_max: float = 3.0,
+        kan_use_skip: bool = True,
         learning_rate: float = 1e-3,
         weight_decay: float = 1e-6,
         temperature: float = 0.1,
@@ -116,6 +121,11 @@ class SSLTrainingModule(pl.LightningModule):
             projection_dim=projection_dim,
             pretrained_path=pretrained_path,
             timm_pretrained=timm_pretrained,
+            projection_head_type=projection_head,
+            kan_num_knots=kan_num_knots,
+            kan_x_min=kan_x_min,
+            kan_x_max=kan_x_max,
+            kan_use_skip=kan_use_skip,
         )
 
         # Create SSL model - manually combine backbone and projection head
@@ -196,6 +206,11 @@ class SSLTrainer:
         max_epochs: int = 100,
         learning_rate: float = 1e-3,
         model_name: str = 'tiny_vit_21m_512.dist_in22k_ft_in1k',
+        projection_head: str = 'mlp',
+        kan_num_knots: int = 16,
+        kan_x_min: float = -3.0,
+        kan_x_max: float = 3.0,
+        kan_use_skip: bool = True,
         use_h5: bool = False,
         h5_dataset_key: str = 'images',
         file_extension: str = 'npy',
@@ -209,6 +224,11 @@ class SSLTrainer:
         self.max_epochs = max_epochs
         self.learning_rate = learning_rate
         self.model_name = model_name
+        self.projection_head = projection_head
+        self.kan_num_knots = kan_num_knots
+        self.kan_x_min = kan_x_min
+        self.kan_x_max = kan_x_max
+        self.kan_use_skip = kan_use_skip
         self.use_h5 = use_h5
         self.h5_dataset_key = h5_dataset_key
         self.file_extension = file_extension
@@ -265,6 +285,11 @@ class SSLTrainer:
         model = SSLTrainingModule(
             num_channels=self.num_channels,
             model_name=self.model_name,
+            projection_head=self.projection_head,
+            kan_num_knots=self.kan_num_knots,
+            kan_x_min=self.kan_x_min,
+            kan_x_max=self.kan_x_max,
+            kan_use_skip=self.kan_use_skip,
             learning_rate=self.learning_rate,
             max_epochs=self.max_epochs,
             pretrained_path=self.pretrained_path,

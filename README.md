@@ -133,6 +133,20 @@ Available TinyViT models:
 python train_ssl.py --data_path ./data --batch_size 64 --epochs 200
 ```
 
+### Using KAN Projection Head
+Enable KAN (Kolmogorov–Arnold Network) projector instead of the default MLP:
+```bash
+python train_ssl.py \
+  --data_path ./data \
+  --projection_head kan \
+  --kan_num_knots 16 \
+  --kan_x_min -3.0 \
+  --kan_x_max 3.0
+```
+Notes:
+- KAN projector is a two-layer KAN with piecewise-linear 1D splines per feature and an optional linear skip path.
+- Adjust `--kan_num_knots` and range if your feature scales differ.
+
 ### Advanced Configuration
 ```bash
 python train_ssl.py \
@@ -347,6 +361,11 @@ Notes:
 | `--file_extension` | 'npy' | Image file format (npy, tiff, tif) |
 | `--num_channels` | 15 | Number of input channels |
 | `--model_name` | tiny_vit_21m_512... | TinyViT model variant |
+| `--projection_head` | mlp | Projection head: `mlp` or `kan` |
+| `--kan_num_knots` | 16 | Spline knots per input (KAN) |
+| `--kan_x_min` | -3.0 | Input range minimum (KAN) |
+| `--kan_x_max` | 3.0 | Input range maximum (KAN) |
+| `--kan_no_skip` | False | Disable KAN linear skip connection |
 | `--batch_size` | 32 | Training batch size |
 | `--epochs` | 100 | Number of training epochs |
 | `--lr` | 1e-3 | Learning rate |

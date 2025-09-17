@@ -35,6 +35,16 @@ def parse_args():
                             'tiny_vit_21m_512.dist_in22k_ft_in1k'
                         ],
                         help='TinyViT model variant')
+    parser.add_argument('--projection_head', type=str, default='mlp', choices=['mlp', 'kan'],
+                        help='Projection head type: standard MLP or KAN')
+    parser.add_argument('--kan_num_knots', type=int, default=16,
+                        help='Number of spline knots per input for KAN projector')
+    parser.add_argument('--kan_x_min', type=float, default=-3.0,
+                        help='Input range minimum for KAN projector')
+    parser.add_argument('--kan_x_max', type=float, default=3.0,
+                        help='Input range maximum for KAN projector')
+    parser.add_argument('--kan_no_skip', action='store_true',
+                        help='Disable linear skip connection in KAN layers')
 
     # Training arguments
     parser.add_argument('--batch_size', type=int, default=32,
@@ -101,6 +111,7 @@ def main():
     print(f"Data path: {args.data_path}")
     print(f"Model: {args.model_name}")
     print(f"Channels: {args.num_channels}")
+    print(f"Projection head: {args.projection_head}")
     print(f"Batch size: {args.batch_size}")
     print(f"Epochs: {args.epochs}")
     print(f"Learning rate: {args.lr}")
@@ -119,6 +130,11 @@ def main():
         max_epochs=args.epochs,
         learning_rate=args.lr,
         model_name=args.model_name,
+        projection_head=args.projection_head,
+        kan_num_knots=args.kan_num_knots,
+        kan_x_min=args.kan_x_min,
+        kan_x_max=args.kan_x_max,
+        kan_use_skip=(not args.kan_no_skip),
         use_h5=args.use_h5,
         h5_dataset_key=args.h5_dataset_key,
         file_extension=args.file_extension,

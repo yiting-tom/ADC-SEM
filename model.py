@@ -189,6 +189,11 @@ def create_ssl_model_components(
     *,
     pretrained_path: Optional[str] = None,
     timm_pretrained: bool = True,
+    projection_head_type: str = 'mlp',  # 'mlp' or 'kan'
+    kan_num_knots: int = 16,
+    kan_x_min: float = -3.0,
+    kan_x_max: float = 3.0,
+    kan_use_skip: bool = True,
 ):
     """
     Creates backbone and projection head for SSL training.
@@ -207,11 +212,25 @@ def create_ssl_model_components(
     if hidden_dim is None:
         hidden_dim = backbone.feature_dim
 
-    from lightly.models.modules import SimCLRProjectionHead
-    projection_head = SimCLRProjectionHead(
-        input_dim=backbone.feature_dim,
-        hidden_dim=hidden_dim,
-        output_dim=projection_dim
-    )
+    if projection_head_type.lower() == 'mlp':
+        from lightly.models.modules import SimCLRProjectionHead
+        projection_head = SimCLRProjectionHead(
+            input_dim=backbone.feature_dim,
+            hidden_dim=hidden_dim,
+            output_dim=projection_dim
+        )
+    elif projection_head_type.lower() == 'kan':
+        from kan import KANProjectionHead
+        projection_head = KANProjectionHead(
+            input_dim=backbone.feature_dim,
+            hidden_dim=hidden_dim,
+            output_dim=projection_dim,
+            num_knots=kan_num_knots,
+            x_min=kan_x_min,
+            x_max=kan_x_max,
+            use_skip=kan_use_skip,
+        )
+    else:
+        raise ValueError(f"Unknown projection_head_type: {projection_head_type}")
 
     return backbone, projection_head
